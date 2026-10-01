@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {parseRecording,SweepAssembler} from '../web/model.js';
+const samples=parseRecording(fs.readFileSync(process.argv[2],'utf8'));
+const assembler=new SweepAssembler();
+let completed=0;
+for (const sample of samples) if(assembler.accept(sample)) ++completed;
+assert.equal(completed,1);
+assert.equal(assembler.pending.length,0);
+assert.equal(samples.length,101);
+assert.equal(samples[92].frequency_hz,433920000);
+assert.equal(samples[92].rssi_dbm,-50);
+console.log('PASS: C++ → JSONL → JavaScript (101 samples, one complete sweep)');
