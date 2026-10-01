@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {demoSweep, presets, parseRecording, validateSample, SweepAssembler, ScanHistory, findPeaks} from '../web/model.js';
+import {demoSweep, presets, parseRecording, validateSample, SweepAssembler, ScanHistory, findPeaks, HI_REST_HZ, analyzePassiveSpectrum, MAX_BINS} from '../web/model.js';
 const rows = demoSweep(presets.subghz, 1);
 test('recording round trip preserves source and precision', () => {
   assert.deepEqual(parseRecording(rows.map(s => JSON.stringify(s)).join('\n')), rows);
@@ -41,4 +41,16 @@ test('peak detector locates demo carriers and obeys threshold', () => {
   assert.equal(peaks[0].frequency_hz,433920000);
   assert.equal(findPeaks(rows,0).length,0);
   assert.equal(peaks.length,3);
+});
+test('space-science profiles fit the bounded scanner model and keep the HI reference explicit', () => {
+  for (const key of ['solar','hydrogen']) {
+    const p = presets[key];
+    const bins = Math.floor((p.stop - p.start) / p.step) + 1;
+    assert.equal(p.domain, 'space-science');
+    assert.ok(bins > 1 && bins <= MAX_BINS);
+  }
+  assert.equal(presets.hydrogen.referenceHz, HI_REST_HZ);
+  const result = analyzePassiveSpectrum(demoSweep(presets.hydrogen, 7), presets.hydrogen);
+  assert.ok(result.candidates.some(c => c.type === 'reference_line_candidate'));
+  assert.ok(result.candidates.every(c => c.delta_db >= 12));
 });

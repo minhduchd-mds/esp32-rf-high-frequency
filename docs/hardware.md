@@ -1,23 +1,25 @@
 # Hardware integration plan
 
-No board wiring is defined yet. v0.1 firmware touches no RF GPIO/SPI/I2C device and emits simulation only.
+No board wiring is defined yet. v0.2 firmware touches no RF GPIO/SPI/I2C device and emits simulation only.
 
 | Path | Intended use | Current status |
 |---|---|---|
 | CC1101 + SPI | Sub-GHz receive-only RSSI sweeps | Interface ready; physical driver pending |
-| Si4735 + I2C | HF broadcast reception / receiver quality | Adapter and unit mapping pending |
+| Si4735 + I2C | HF reception / receiver quality | Adapter and unit mapping pending |
 | ESP32 PCNT / RMT + suitable input conditioning | Pulse counting / edge timing | Separate capture schema and driver pending |
+| Receive-only SDR gateway | Space-science spectra | Software roadmap defined; adapter pending |
 
-The CC1101 IC supports discontinuous ranges of 300–348, 387–464 and 779–928 MHz according to TI. A module's matching network/antenna may support a narrower band. A requested sweep must fit inside one supported band; the core `within` helper rejects sweeps crossing gaps. The UI's 433 MHz preset is a simulation example, not a declaration of usable hardware bandwidth.
+The CC1101 path remains a narrow receive-only laboratory milestone. The Si4735 path is separate from broadband space-science acquisition. ESP32 is not treated as a broadband RF ADC.
 
-The Si4735 HF direction from the initial brief remains planned; exact part suffix, board capabilities, command reference, settling time and RSSI units must be checked during adapter implementation. Do not extrapolate the brief's 26.1 MHz limit to a 30 MHz-capable receiver without verifying another frontend.
+Before physical work, record the exact ESP32 board/revision, receiver module, schematic, oscillator/reference, power requirements, pin mapping, antenna connector and RF front-end characteristics. Validate power and bus communication before measurements.
 
-Before hardware work, record the exact ESP32 board/revision, module markings, schematic, oscillator value, logic/power requirements, pin mapping and antenna connector. Validate power and bus communication before measuring a known signal. Keep laboratory measurements separate from simulated fixtures.
+## Space-science receive path
 
-Sources:
+| Observation | Software profile | Physical acquisition direction |
+|---|---|---|
+| Solar / Jovian decametric emission | 14–30 MHz, 50 kHz grid | Suitable HF antenna + filtering + low-noise receive chain + SDR/receiver |
+| Neutral hydrogen HI | 1400–1427 MHz, 100 kHz grid | L-band feed + 1420 MHz-region band-pass filtering + LNA + SDR/receiver |
 
-- [TI CC1101 product and datasheet](https://www.ti.com/product/CC1101)
-- [Skyworks Si47xx evaluation board guide](https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/user-guides/Si47xxEVB.pdf)
-- [ESP-IDF v5.4.2 programming guide](https://docs.espressif.com/projects/esp-idf/en/v5.4.2/esp32/)
-- [ESP-IDF component build system](https://docs.espressif.com/projects/esp-idf/en/v5.4.2/esp32/api-guides/build-system.html)
-- [Espressif GitHub CI action](https://github.com/espressif/esp-idf-ci-action)
+For real observations, record the full receive chain, antenna, filter bandwidth, gain, oscillator/reference, sample/integration settings and calibration state. Characterize local RFI before classifying any candidate.
+
+No transmit, jammer, protected-communications interception or targeting hardware belongs in the space-science path.
