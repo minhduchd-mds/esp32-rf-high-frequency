@@ -1,9 +1,10 @@
-import {presets, demoSweep, parseRecording, SweepAssembler, ScanHistory, findPeaks, MAX_RECORDS, MAX_FILE_BYTES} from './model.js';
+import {presets, demoSweep, parseRecording, SweepAssembler, ScanHistory, findPeaks, MAX_RECORDS, MAX_FILE_BYTES, SCIENCE_HISTORY_ROWS, analyzePassiveSpectrum, averageSweeps, buildScienceSession} from './model.js';
 const $ = id => document.getElementById(id);
-const history = new ScanHistory();
+const history = new ScanHistory(SCIENCE_HISTORY_ROWS);
 let mode = 'demo', running = false, timer = null, sweep = 0, records = [], port = null, reader = null, connecting = false;
-let serialSession = 0;
+let serialSession = 0, integrationBuffer = [], sessionStartedAt = new Date().toISOString();
 const mhz = hz => (hz / 1e6).toFixed(3);
+const integrationCount = () => Number($('integration').value);
 function notice(message, error = false) { $('notice').textContent = message; $('notice').classList.toggle('error', error); }
 function sourceLabel(samples) {
   const simulated = !samples.length || samples[0].source === 'simulation';
@@ -11,8 +12,8 @@ function sourceLabel(samples) {
   $('source').classList.toggle('live', !simulated);
 }
 function clear() {
-  history.clear(); records = []; sweep = 0;
-  $('export').disabled = true;
+  history.clear(); records = []; sweep = 0; integrationBuffer = []; sessionStartedAt = new Date().toISOString();
+  $('export').disabled = true; $('export-session').disabled = true;
   render();
 }
 function accept(samples) {
@@ -20,9 +21,8 @@ function accept(samples) {
       samples.length !== history.samples.length || samples.some((s,i)=>s.frequency_hz !== history.samples[i].frequency_hz))) records = [];
   history.add(samples);
   records.push(...samples);
-  // Evict complete oldest sweeps so an export always begins at index zero.
   while (records.length > MAX_RECORDS) records.splice(0, records[0].total);
-  $('export').disabled = false;
+  $('export').disabled = false; $('export-session').disabled = false;
   sourceLabel(samples); render();
 }
 function runningState(value) {
@@ -31,15 +31,23 @@ function runningState(value) {
   $('status').textContent = value ? 'Đang quét' : 'Đã dừng';
 }
 function stop() { clearInterval(timer); timer = null; runningState(false); }
-function demoTick() { accept(demoSweep(presets[$('profile').value], ++sweep)); }
+function demoTick() {
+  integrationBuffer.push(demoSweep(presets[$('profile').value], ++sweep));
+  const count=integrationCount();
+  if(integrationBuffer.length >= count) {
+    accept(averageSweeps(integrationBuffer.slice(-count)));
+    integrationBuffer=[];
+  }
+}
 $('scan').addEventListener('click', () => {
   if (running) { stop(); return; }
   if (mode !== 'demo') { mode = 'demo'; clear(); }
   runningState(true); demoTick(); timer = setInterval(demoTick, 700);
-  notice('Chế độ mô phỏng · Không phát sóng RF.');
+  notice('Mô phỏng thu thụ động · Candidate cần hiệu chuẩn, loại RFI và xác nhận độc lập.');
 });
 $('profile').addEventListener('change', () => { clear(); if(running) demoTick(); });
-$('reset').addEventListener('click', () => { clear(); notice('Đã xóa lịch sử và peak hold.'); });
+$('integration').addEventListener('change', () => { clear(); if(running) demoTick(); });
+$('reset').addEventListener('click', () => { clear(); notice('Đã xóa lịch sử, peak hold và science session.'); });
 $('threshold').addEventListener('input', () => { $('threshold-value').textContent = `${$('threshold').value} dBm`; render(); });
 $('hold').addEventListener('change', render);
 $('import').addEventListener('click', () => $('file').click());
@@ -67,17 +75,30 @@ $('export').addEventListener('click', () => {
   a.href=url; a.download=`rf-${history.samples[0]?.source || 'simulation'}-${Date.now()}.jsonl`; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
+$('export-session').addEventListener('click', () => {
+  const profileKey=$('profile').value, profile=presets[profileKey];
+  const analysis=analyzePassiveSpectrum(history.samples, profile);
+  const session=buildScienceSession({
+    profileKey, samples:history.samples, analysis, integrationSweeps:integrationCount(),
+    calibrationState:history.samples[0]?.source==='device'?'uncalibrated':'relative',
+    receiver:mode==='serial'?'usb-jsonl-device':mode, startedAt:sessionStartedAt
+  });
+  const blob=new Blob([JSON.stringify(session,null,2)+'\n'],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=`rf-science-session-${profileKey}-${Date.now()}.json`;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
 
 function serialControls(connected) {
-  for(const id of ['scan','profile','import']) $(id).disabled=connected;
+  for(const id of ['scan','profile','integration','import']) $(id).disabled=connected;
   $('serial').textContent=connected?'Ngắt USB':'Kết nối USB';
   $('connection').textContent=connected?'USB · 115200 baud':'Chưa kết nối ESP32';
 }
 async function disconnect() {
   ++serialSession;
   const oldReader=reader, oldPort=port; reader=null; port=null;
-  try { await oldReader?.cancel(); } catch { /* Device may already be unplugged. */ }
-  try { oldReader?.releaseLock(); await oldPort?.close(); } catch { /* OS closed port. */ }
+  try { await oldReader?.cancel(); } catch {}
+  try { oldReader?.releaseLock(); await oldPort?.close(); } catch {}
   stop(); serialControls(false); mode='file';
   sourceLabel(history.samples);
   notice('Đã ngắt USB · Dữ liệu đang hiển thị là bản ghi cuối.');
@@ -94,7 +115,7 @@ $('serial').addEventListener('click', async () => {
     stop(); clear(); mode='serial'; port=selected; serialControls(true); runningState(true);
     $('source').textContent='USB · CHỜ MẪU'; $('source').classList.remove('live');
     $('status').textContent='Đang nhận USB';
-    notice('Đọc JSONL từ thiết bị · Nhãn nguồn theo firmware.');
+    notice('Đọc JSONL thụ động từ thiết bị · Nhãn nguồn theo firmware.');
     const token=++serialSession;
     reader=selected.readable.getReader();
     const activeReader=reader, decoder=new TextDecoder(), assembler=new SweepAssembler();
@@ -106,7 +127,7 @@ $('serial').addEventListener('click', async () => {
       let newline;
       while((newline=buffer.indexOf('\n'))>=0) {
         const line=buffer.slice(0,newline).trim(); buffer=buffer.slice(newline+1);
-        if(!line.startsWith('{')) continue; // Ignore ESP-IDF boot/log lines.
+        if(!line.startsWith('{')) continue;
         try {
           if(line.length>2048) throw new Error('Bản tin USB quá dài.');
           const message=JSON.parse(line);
@@ -177,19 +198,24 @@ function drawWaterfall() {
   rows.forEach((row,ri)=>row.forEach((v,i)=> {
     const t=clamp((v+120)/90,0,1);
     c.fillStyle=`hsl(${205-t*155} ${45+t*25}% ${8+t*49}%)`;
-    c.fillRect(i*w/row.length,ri*h/100,Math.ceil(w/row.length),Math.ceil(h/100));
+    c.fillRect(i*w/row.length,ri*h/history.limit,Math.ceil(w/row.length),Math.ceil(h/history.limit));
   }));
 }
 function render() {
   const samples=history.samples,peaks=findPeaks(samples,Number($('threshold').value));
+  const profile=presets[$('profile').value];
+  const analysis=analyzePassiveSpectrum(samples,profile);
+  const scienceCandidates=analysis.candidates.filter(c=>!c.quality_flags.length);
   const strongest=samples.reduce((best,s)=>!best||s.rssi_dbm>best.rssi_dbm?s:best,null);
   $('strongest').replaceChildren(document.createTextNode(strongest?strongest.rssi_dbm.toFixed(1)+' ':'— '));
   const unit=document.createElement('small');unit.textContent='dBm';$('strongest').append(unit);
   $('peak-frequency').textContent=strongest?`${mhz(strongest.frequency_hz)} MHz`:'Chưa có dữ liệu';
+  $('baseline').textContent=analysis.baseline_dbm==null?'—':`${analysis.baseline_dbm.toFixed(1)}`;
+  $('candidate-count').textContent=String(scienceCandidates.length).padStart(2,'0');
   $('peak-count').textContent=String(peaks.length).padStart(2,'0');
   $('sweep-count').textContent=String(history.total).padStart(3,'0');
-  $('sample-count').textContent=`${samples.length} mẫu / vòng`;
-  const profile=presets[$('profile').value],start=samples[0]?.frequency_hz??profile.start,end=samples.at(-1)?.frequency_hz??profile.stop;
+  $('sample-count').textContent=`${samples.length} mẫu / vòng · ×${integrationCount()}`;
+  const start=samples[0]?.frequency_hz??profile.start,end=samples.at(-1)?.frequency_hz??profile.stop;
   $('band').textContent=`${mhz(start)}–${mhz(end)}`;
   const step=samples.length>1?samples[1].frequency_hz-samples[0].frequency_hz:profile.step;
   const uniform=samples.length<3||samples.slice(1).every((s,i)=>s.frequency_hz-samples[i].frequency_hz===step);

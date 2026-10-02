@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>RF Observatory · Passive space signal console</title>
+  <title>RF Observatory · Space science mission console</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="./style.css">
 </head>
@@ -13,15 +13,18 @@
     <div class="header-right"><span class="source" id="source">MÔ PHỎNG</span><span class="device" id="connection">Chưa kết nối ESP32</span><button id="serial">Kết nối USB</button></div>
   </header>
   <main>
-    <section class="heading"><div><p class="eyebrow">MISSION CONTROL / PASSIVE SPECTRUM</p><h1>Không gian vô tuyến<span>.</span></h1></div><div class="toolbar"><button id="import">Mở bản ghi</button><button id="export" disabled>Xuất JSONL</button><input type="file" id="file" accept=".jsonl,.ndjson,.txt" hidden></div></section>
+    <section class="heading"><div><p class="eyebrow">MISSION CONTROL / PASSIVE SPECTRUM</p><h1>Không gian vô tuyến<span>.</span></h1></div><div class="toolbar"><button id="import">Mở bản ghi</button><button id="export" disabled>Xuất JSONL</button><button id="export-session" disabled>Xuất phiên</button><input type="file" id="file" accept=".jsonl,.ndjson,.txt" hidden></div></section>
     <section class="controls" aria-label="Điều khiển quét">
       <label>Hồ sơ quan sát<select id="profile"><option value="subghz">Sub-GHz · 433 MHz</option><option value="hf">HF · 7 MHz</option><option value="solar">Space · Solar/Jupiter · 14–30 MHz</option><option value="hydrogen">Space · HI 21 cm · 1400–1427 MHz</option></select></label>
+      <label>Tích phân<select id="integration"><option value="1">1 vòng</option><option value="4">4 vòng</option><option value="8">8 vòng</option></select></label>
       <label class="threshold">Ngưỡng đỉnh <output id="threshold-value">−85 dBm</output><input id="threshold" type="range" min="-120" max="-30" value="-85"></label>
       <div class="scan-info"><span class="status-dot"></span><span id="status">Sẵn sàng</span></div>
       <button id="reset">Xóa lịch sử</button><button class="primary" id="scan">Bắt đầu quét</button>
     </section>
     <section class="stats" aria-label="Thông số vòng quét">
       <div><span>TÍN HIỆU MẠNH NHẤT</span><strong id="strongest">— <small>dBm</small></strong><p id="peak-frequency">Chưa có dữ liệu</p></div>
+      <div><span>BASELINE</span><strong id="baseline">—</strong><p>Median noise floor</p></div>
+      <div><span>SCIENCE CANDIDATES</span><strong id="candidate-count">00</strong><p>Chưa xác nhận nguồn</p></div>
       <div><span>ĐỈNH VƯỢT NGƯỠNG</span><strong id="peak-count">00</strong><p>Cực đại cục bộ</p></div>
       <div><span>DẢI ĐANG HIỂN THỊ</span><strong id="band">433–434 <small>MHz</small></strong><p id="resolution">Bước quét 10 kHz</p></div>
       <div><span>VÒNG QUÉT</span><strong id="sweep-count">000</strong><p id="sample-count">0 mẫu / vòng</p></div>
@@ -29,10 +32,10 @@
     <div class="dashboard">
       <section class="panel polar-panel"><div class="panel-heading"><h2>Vòng quét tín hiệu</h2><span class="tag">POLAR VIEW</span></div><div class="polar-wrap"><canvas id="polar" aria-label="Tần số theo góc, cường độ RSSI theo bán kính" role="img"></canvas><span class="polar-label">FREQUENCY × RSSI</span></div><div class="panel-foot"><span>Góc: tần số</span><span>Bán kính: RSSI</span></div></section>
       <section class="panel spectrum-panel"><div class="panel-heading"><h2>Phổ tín hiệu</h2><label class="toggle"><input id="hold" type="checkbox" checked> Peak hold</label></div><div class="legend"><span class="green">● RSSI</span><span class="amber">● Đỉnh lưu</span><span>dBm / MHz</span></div><canvas id="spectrum" aria-label="Biểu đồ RSSI theo tần số" role="img"></canvas></section>
-      <section class="panel waterfall-panel"><div class="panel-heading"><h2>Lịch sử phổ</h2><span class="subtle">Mới nhất ở trên · tối đa 100 vòng</span></div><canvas id="waterfall" aria-label="Lịch sử RSSI theo tần số và vòng quét" role="img"></canvas><div class="scale"><span>−120 dBm</span><i></i><span>−30 dBm</span></div></section>
-      <section class="panel signals-panel"><div class="panel-heading"><h2>Đỉnh tín hiệu</h2><span class="subtle">Top 8</span></div><div class="table-wrap"><table><thead><tr><th>Tần số</th><th>RSSI</th><th>Mức tín hiệu</th></tr></thead><tbody id="signals"><tr><td colspan="3" class="empty">Bắt đầu quét để xem tín hiệu</td></tr></tbody></table></div></section>
+      <section class="panel waterfall-panel"><div class="panel-heading"><h2>Lịch sử phổ khoa học</h2><span class="subtle">Mới nhất ở trên · tối đa 360 vòng</span></div><canvas id="waterfall" aria-label="Lịch sử RSSI theo tần số và vòng quét" role="img"></canvas><div class="scale"><span>−120 dBm</span><i></i><span>−30 dBm</span></div></section>
+      <section class="panel signals-panel"><div class="panel-heading"><h2>Đỉnh tín hiệu</h2><span class="subtle">Top 8 · candidate review</span></div><div class="table-wrap"><table><thead><tr><th>Tần số</th><th>RSSI</th><th>Mức tín hiệu</th></tr></thead><tbody id="signals"><tr><td colspan="3" class="empty">Bắt đầu quét để xem tín hiệu</td></tr></tbody></table></div></section>
     </div>
-    <footer><span id="notice" role="status" aria-live="polite">Chế độ mô phỏng · Thu thụ động · Không phát sóng RF.</span><span>v0.2 · Space science · Không định vị mục tiêu</span></footer>
+    <footer><span id="notice" role="status" aria-live="polite">Chế độ mô phỏng · Thu thụ động · Không phát sóng RF.</span><span>v0.5 · Ground-station science pipeline · Candidate ≠ xác nhận nguồn ngoài Trái Đất</span></footer>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
