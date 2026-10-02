@@ -2,7 +2,7 @@
 
 Passive RF measurement and space-science workspace built around a portable C++17 scan engine, ESP-IDF firmware, deterministic simulation and a browser mission console.
 
-**Current software version: v0.7.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
+**Current software version: v0.8.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
 
 ## Implemented
 
@@ -80,3 +80,16 @@ The gateway binds only to `127.0.0.1:8787`, accepts Spectrum v2 NDJSON from **st
 ## Physical-ready metadata
 
 v0.7 adds receive-only hardware-manifest fingerprints, calibration-curve import, raw/calibrated separation, RFI quality-mask editing, SHA-256 sealed science sessions and two-session integrity comparison.
+
+
+## Weak Signal Lab v0.8
+
+The weak-signal layer applies testable principles from induction, field theory and tuned/selective reception:
+
+- Lorentzian resonant weighting around a selected center frequency and Q.
+- Multi-sweep candidate persistence; the Mission Console exposes candidates that survive at least three consecutive clean sweeps.
+- True synchronous/lock-in detection for time-domain samples with declared sample rate and reference frequency; it returns I/Q, amplitude and phase and is not synthesized from RSSI-only data.
+- Multi-sensor coincidence across direct-voltage, E-field, H-field/search-coil, fluxgate and RF-antenna classes.
+- Bounded 3D WaveFieldMap records x/y/z + frequency + sensor + value + timestamp for future spatial field maps.
+
+See [Weak Signal Lab](docs/weak-signal-lab.md).

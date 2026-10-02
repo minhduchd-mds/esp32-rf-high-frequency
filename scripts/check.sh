@@ -10,5 +10,5 @@ fi
 ./build/rf_tests
 "${CXX:-g++}" "${flags[@]}" core/src/scanner.cpp simulator/main.cpp -o build/rf_simulator
 ./build/rf_simulator > build/demo.jsonl
-node --test tests/model.test.mjs tests/gateway.test.mjs
+node --test tests/model.test.mjs tests/gateway.test.mjs tests/weak-signal.test.mjs
 node scripts/check-telemetry.mjs build/demo.jsonl

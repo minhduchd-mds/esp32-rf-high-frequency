@@ -1,9 +1,11 @@
 import {presets, demoSweep, parseRecording, SweepAssembler, ScanHistory, findPeaks, MAX_RECORDS, MAX_FILE_BYTES, SCIENCE_HISTORY_ROWS, analyzePassiveSpectrum, averageSweeps, buildScienceSession, validateSpectrumFrame, spectrumFrameToSamples, validateHardwareManifest, validateCalibrationCurve, applyCalibrationCurve, sha256Hex, sealScienceSession, verifyScienceSession, compareScienceSessions, validateRfiMasks} from './model.js';
+import {CandidatePersistence, resonantPowerEstimate} from './weak-signal.js';
 const $ = id => document.getElementById(id);
 const history = new ScanHistory(SCIENCE_HISTORY_ROWS);
+const persistence = new CandidatePersistence({minHits:3,maxGap:1});
 let mode = 'demo', running = false, timer = null, sweep = 0, records = [], port = null, reader = null, connecting = false;
 let serialSession = 0, integrationBuffer = [], sessionStartedAt = new Date().toISOString();
-let calibrationCurve=null, calibrationHash=null, hardwareManifest=null, hardwareHash=null, rfiMasks=[], gateway=null;
+let calibrationCurve=null, calibrationHash=null, hardwareManifest=null, hardwareHash=null, rfiMasks=[], gateway=null, persistentCandidates=[], resonantEstimate=null;
 const mhz = hz => (hz / 1e6).toFixed(3);
 const integrationCount = () => Number($('integration').value);
 function notice(message, error = false) { $('notice').textContent = message; $('notice').classList.toggle('error', error); }
@@ -14,7 +16,7 @@ function sourceLabel(samples) {
   $('source').classList.toggle('live', !simulated);
 }
 function clear() {
-  history.clear(); records = []; sweep = 0; integrationBuffer = []; sessionStartedAt = new Date().toISOString();
+  history.clear(); persistence.reset(); persistentCandidates=[]; resonantEstimate=null; records = []; sweep = 0; integrationBuffer = []; sessionStartedAt = new Date().toISOString();
   $('export').disabled = true; $('export-session').disabled = true;
   renderRfiMasks();
 render();
@@ -24,6 +26,11 @@ function accept(samples) {
       samples.length !== history.samples.length || samples.some((s,i)=>s.frequency_hz !== history.samples[i].frequency_hz))) records = [];
   const displaySamples=calibrationCurve ? applyCalibrationCurve(samples,calibrationCurve) : samples;
   history.add(displaySamples);
+  const activeProfile=presets[$('profile').value];
+  const weakAnalysis=analyzePassiveSpectrum(displaySamples,activeProfile,12,rfiMasks);
+  persistentCandidates=persistence.update(weakAnalysis,activeProfile.step).persistent;
+  const center=Number.isFinite(activeProfile.referenceHz) ? activeProfile.referenceHz : weakAnalysis.peak_frequency_hz;
+  resonantEstimate=center ? resonantPowerEstimate(displaySamples,center,100) : null;
   records.push(...samples);
   while (records.length > MAX_RECORDS) records.splice(0, records[0].total);
   $('export').disabled = false; $('export-session').disabled = false;
@@ -231,6 +238,8 @@ function render() {
   $('peak-frequency').textContent=strongest?`${mhz(strongest.frequency_hz)} MHz`:'Chưa có dữ liệu';
   $('baseline').textContent=analysis.baseline_dbm==null?'—':`${analysis.baseline_dbm.toFixed(1)}`;
   $('candidate-count').textContent=String(scienceCandidates.length).padStart(2,'0');
+  $('persistent-count').textContent=String(persistentCandidates.length).padStart(2,'0');
+  $('resonant-level').textContent=resonantEstimate?`${resonantEstimate.power_dbm.toFixed(1)} dBm · Q100`:'Chưa khóa cộng hưởng';
   $('peak-count').textContent=String(peaks.length).padStart(2,'0');
   $('sweep-count').textContent=String(history.total).padStart(3,'0');
   $('sample-count').textContent=`${samples.length} mẫu / vòng · ×${integrationCount()}`;
