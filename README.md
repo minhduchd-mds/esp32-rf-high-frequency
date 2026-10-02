@@ -2,7 +2,7 @@
 
 Passive RF measurement and space-science workspace built around a portable C++17 scan engine, ESP-IDF firmware, deterministic simulation and a browser mission console.
 
-**Current software version: v0.5.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
+**Current software version: v0.7.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
 
 ## Implemented
 
@@ -65,3 +65,18 @@ Read [Space Science Roadmap](docs/space-science.md), [SDR Gateway](docs/sdr-gate
 ## Scope boundary
 
 RF Observatory is receive-only scientific instrumentation. It does not implement RF transmission, jamming, communications interception/decryption, weapon guidance or military target tracking.
+
+
+## Local receive-only gateway
+
+Bridge a physical acquisition process to the browser without exposing an RF command channel:
+
+```sh
+some_receive_only_spectrum_source | npm run gateway
+```
+
+The gateway binds only to `127.0.0.1:8787`, accepts Spectrum v2 NDJSON from **stdin**, and exposes GET-only SSE at `/events`. Browser content cannot send tuner/RF commands through this path.
+
+## Physical-ready metadata
+
+v0.7 adds receive-only hardware-manifest fingerprints, calibration-curve import, raw/calibrated separation, RFI quality-mask editing, SHA-256 sealed science sessions and two-session integrity comparison.

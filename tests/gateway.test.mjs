@@ -1,0 +1,4 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {parseGatewayLine,createGatewayServer} from '../scripts/gateway.mjs';
+const frame={version:2,type:'spectrum',source:'device',sequence:1,start_hz:1400000000,step_hz:100000,powers_dbm:[-110,-109],timestamp_ms:10,rbw_hz:100000,integration_ms:1000,calibration_state:'relative'};
+test('gateway accepts bounded receive-only spectrum v2',()=>{assert.deepEqual(parseGatewayLine(JSON.stringify(frame)),frame);assert.throws(()=>parseGatewayLine(JSON.stringify({...frame,source:'simulation'})));assert.throws(()=>parseGatewayLine('x'.repeat(65537)));});
+test('gateway exposes local read-only server primitives',()=>{const{server,clients}=createGatewayServer();assert.equal(server.listening,false);assert.equal(clients.size,0);server.close();});

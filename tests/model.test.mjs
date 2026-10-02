@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {demoSweep, presets, parseRecording, validateSample, SweepAssembler, ScanHistory, findPeaks, HI_REST_HZ, analyzePassiveSpectrum, MAX_BINS, averageSweeps, validateSpectrumFrame, spectrumFrameToSamples, buildScienceSession, validateRfiMasks} from '../web/model.js';
+import {demoSweep, presets, parseRecording, validateSample, SweepAssembler, ScanHistory, findPeaks, HI_REST_HZ, analyzePassiveSpectrum, MAX_BINS, averageSweeps, validateSpectrumFrame, spectrumFrameToSamples, buildScienceSession, validateRfiMasks, validateHardwareManifest, validateCalibrationCurve, applyCalibrationCurve, sha256Hex, sealScienceSession, verifyScienceSession, compareScienceSessions} from '../web/model.js';
 const rows = demoSweep(presets.subghz, 1);
 test('recording round trip preserves source and precision', () => {
   assert.deepEqual(parseRecording(rows.map(s => JSON.stringify(s)).join('\n')), rows);
@@ -87,3 +87,7 @@ test('science session captures provenance and candidate summary', () => {
   assert.equal(session.integration_sweeps,4);
   assert.match(session.statement,/Candidate review only/);
 });
+
+test('hardware manifest is receive-only and fingerprintable',async()=>{const m=validateHardwareManifest({schema:'rf-observatory/hardware-manifest-v1',receive_only:true,receiver:'science-rx',antenna:'L-band feed',front_end:{lna:'LNA',filters:['BPF'],clock_reference:'TCXO'}});assert.equal(m.receive_only,true);assert.equal((await sha256Hex(m)).length,64);assert.throws(()=>validateHardwareManifest({...m,receive_only:false}));});
+test('calibration interpolates corrections without mutating raw',()=>{const raw=demoSweep(presets.subghz,1),curve=validateCalibrationCurve({schema:'rf-observatory/calibration-v1',points:[{frequency_hz:433000000,correction_db:1},{frequency_hz:434000000,correction_db:3}]});const calibrated=applyCalibrationCurve(raw,curve);assert.equal(raw[0].rssi_dbm+1,calibrated[0].rssi_dbm);assert.equal(raw.at(-1).rssi_dbm+3,calibrated.at(-1).rssi_dbm);assert.notDeepEqual(raw,calibrated);});
+test('science sessions seal and compare deterministically',async()=>{const samples=demoSweep(presets.hydrogen,4),analysis=analyzePassiveSpectrum(samples,presets.hydrogen),base=buildScienceSession({profileKey:'hydrogen',samples,analysis,integrationSweeps:1,calibrationState:'relative',receiver:'sim',startedAt:'2026-10-02T00:00:00.000Z'}),sealed=await sealScienceSession(base);assert.equal(await verifyScienceSession(sealed),true);assert.equal(await verifyScienceSession({...sealed,profile:'solar'}),false);const c=compareScienceSessions(sealed,{...sealed,analysis:{...sealed.analysis,baseline_dbm:sealed.analysis.baseline_dbm+2}});assert.equal(c.grid_match,true);assert.equal(c.baseline_delta_db,2);});

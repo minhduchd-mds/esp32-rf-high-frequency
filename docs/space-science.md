@@ -47,17 +47,31 @@ Completed foundation:
 - bounded SDR frame validator/converter.
 - provenance remains simulation/device specific.
 
-## v0.6 — next safe milestone
+## v0.6 — ground-station bridge
 
-Planned:
+Completed:
 
-- local read-only gateway transport for Spectrum v2;
-- observation manifest with hardware-chain fingerprints;
-- calibration curve import;
-- user-defined RFI mask editor;
-- multi-session comparison;
-- session integrity hashes;
-- optional public scientific context feeds.
+- localhost-only, GET-only SSE gateway for Spectrum v2;
+- gateway input from stdin so browser content cannot command the RF device;
+- bounded clients and frame validation;
+- observation hardware manifest with SHA-256 fingerprint.
+
+## v0.7 — reproducibility layer
+
+Completed:
+
+- calibration-curve import and interpolation with full-band coverage checks;
+- raw evidence preserved separately from calibrated display values;
+- user-defined RFI quality-mask editor;
+- SHA-256 sealed science-session exports;
+- integrity verification and two-session comparison.
+
+Still future work:
+
+- physical receiver calibration in the lab;
+- actual antenna/front-end commissioning;
+- optional public scientific context feeds;
+- independent cross-station confirmation workflows.
 
 ## v1.0 target
 

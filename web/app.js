@@ -1,25 +1,29 @@
-import {presets, demoSweep, parseRecording, SweepAssembler, ScanHistory, findPeaks, MAX_RECORDS, MAX_FILE_BYTES, SCIENCE_HISTORY_ROWS, analyzePassiveSpectrum, averageSweeps, buildScienceSession} from './model.js';
+import {presets, demoSweep, parseRecording, SweepAssembler, ScanHistory, findPeaks, MAX_RECORDS, MAX_FILE_BYTES, SCIENCE_HISTORY_ROWS, analyzePassiveSpectrum, averageSweeps, buildScienceSession, validateSpectrumFrame, spectrumFrameToSamples, validateHardwareManifest, validateCalibrationCurve, applyCalibrationCurve, sha256Hex, sealScienceSession, verifyScienceSession, compareScienceSessions, validateRfiMasks} from './model.js';
 const $ = id => document.getElementById(id);
 const history = new ScanHistory(SCIENCE_HISTORY_ROWS);
 let mode = 'demo', running = false, timer = null, sweep = 0, records = [], port = null, reader = null, connecting = false;
 let serialSession = 0, integrationBuffer = [], sessionStartedAt = new Date().toISOString();
+let calibrationCurve=null, calibrationHash=null, hardwareManifest=null, hardwareHash=null, rfiMasks=[], gateway=null;
 const mhz = hz => (hz / 1e6).toFixed(3);
 const integrationCount = () => Number($('integration').value);
 function notice(message, error = false) { $('notice').textContent = message; $('notice').classList.toggle('error', error); }
 function sourceLabel(samples) {
   const simulated = !samples.length || samples[0].source === 'simulation';
-  $('source').textContent = `${mode === 'file' ? 'BẢN GHI · ' : ''}${simulated ? 'MÔ PHỎNG' : 'THIẾT BỊ'}`;
+  const prefix=mode==='file'?'BẢN GHI · ':mode==='gateway'?'GATEWAY · ':'';
+  $('source').textContent = `${prefix}${simulated ? 'MÔ PHỎNG' : 'THIẾT BỊ'}`;
   $('source').classList.toggle('live', !simulated);
 }
 function clear() {
   history.clear(); records = []; sweep = 0; integrationBuffer = []; sessionStartedAt = new Date().toISOString();
   $('export').disabled = true; $('export-session').disabled = true;
-  render();
+  renderRfiMasks();
+render();
 }
 function accept(samples) {
   if (history.samples.length && (samples[0].source !== history.samples[0].source ||
       samples.length !== history.samples.length || samples.some((s,i)=>s.frequency_hz !== history.samples[i].frequency_hz))) records = [];
-  history.add(samples);
+  const displaySamples=calibrationCurve ? applyCalibrationCurve(samples,calibrationCurve) : samples;
+  history.add(displaySamples);
   records.push(...samples);
   while (records.length > MAX_RECORDS) records.splice(0, records[0].total);
   $('export').disabled = false; $('export-session').disabled = false;
@@ -75,19 +79,34 @@ $('export').addEventListener('click', () => {
   a.href=url; a.download=`rf-${history.samples[0]?.source || 'simulation'}-${Date.now()}.jsonl`; a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
-$('export-session').addEventListener('click', () => {
+$('export-session').addEventListener('click', async () => {
   const profileKey=$('profile').value, profile=presets[profileKey];
-  const analysis=analyzePassiveSpectrum(history.samples, profile);
+  const analysis=analyzePassiveSpectrum(history.samples, profile, 12, rfiMasks);
   const session=buildScienceSession({
     profileKey, samples:history.samples, analysis, integrationSweeps:integrationCount(),
-    calibrationState:history.samples[0]?.source==='device'?'uncalibrated':'relative',
+    calibrationState:calibrationCurve?'calibrated':(history.samples[0]?.source==='device'?'uncalibrated':'relative'),
     receiver:mode==='serial'?'usb-jsonl-device':mode, startedAt:sessionStartedAt
   });
+  Object.assign(session,{hardware_manifest_fingerprint:hardwareHash,calibration_curve_fingerprint:calibrationHash,rfi_masks:rfiMasks});
+  session=await sealScienceSession(session);
   const blob=new Blob([JSON.stringify(session,null,2)+'\n'],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=`rf-science-session-${profileKey}-${Date.now()}.json`;a.click();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
 });
+
+$('calibration-btn').addEventListener('click',()=>$('calibration-file').click());
+$('calibration-file').addEventListener('change',async()=>{const file=$('calibration-file').files[0];if(!file)return;try{calibrationCurve=validateCalibrationCurve(JSON.parse(await file.text()));calibrationHash=await sha256Hex(calibrationCurve);clear();notice(`Calibration loaded · ${calibrationHash.slice(0,12)}… · raw preserved.`);}catch(e){notice(e.message,true);}finally{$('calibration-file').value='';}});
+$('manifest-btn').addEventListener('click',()=>$('manifest-file').click());
+$('manifest-file').addEventListener('change',async()=>{const file=$('manifest-file').files[0];if(!file)return;try{hardwareManifest=validateHardwareManifest(JSON.parse(await file.text()));hardwareHash=await sha256Hex(hardwareManifest);notice(`Receive-only hardware manifest · ${hardwareHash.slice(0,12)}…`);}catch(e){notice(e.message,true);}finally{$('manifest-file').value='';}});
+function renderRfiMasks(){$('rfi-count').textContent=String(rfiMasks.length);$('rfi-list').replaceChildren();for(const [i,m] of rfiMasks.entries()){const row=document.createElement('div'),span=document.createElement('span'),del=document.createElement('button');span.textContent=`${(m.start_hz/1e6).toFixed(3)}–${(m.stop_hz/1e6).toFixed(3)} MHz · ${m.label}`;del.textContent='×';del.addEventListener('click',()=>{rfiMasks.splice(i,1);renderRfiMasks();render();});row.append(span,del);$('rfi-list').append(row);}}
+$('rfi-btn').addEventListener('click',()=>$('rfi-dialog').showModal());$('rfi-close').addEventListener('click',()=>$('rfi-dialog').close());
+$('rfi-add').addEventListener('click',()=>{try{rfiMasks=validateRfiMasks([...rfiMasks,{start_hz:Math.round(Number($('rfi-start').value)*1e6),stop_hz:Math.round(Number($('rfi-stop').value)*1e6),label:$('rfi-label').value||'local-rfi'}]);renderRfiMasks();render();notice('RFI mask added as quality flag; raw evidence untouched.');}catch(e){notice(e.message,true);}});
+function gatewayControls(connected){for(const id of ['scan','profile','integration','import','serial'])$(id).disabled=connected;$('gateway').textContent=connected?'Ngắt Gateway':'Gateway local';}
+async function disconnectGateway(){gateway?.close();gateway=null;gatewayControls(false);stop();mode='file';sourceLabel(history.samples);notice('Đã ngắt local gateway.');}
+$('gateway').addEventListener('click',async()=>{if(gateway){await disconnectGateway();return;}try{stop();clear();mode='gateway';gatewayControls(true);runningState(true);$('status').textContent='Gateway local';$('source').textContent='GATEWAY · CHỜ PHỔ';gateway=new EventSource('http://127.0.0.1:8787/events');gateway.onmessage=event=>{try{accept(spectrumFrameToSamples(validateSpectrumFrame(JSON.parse(event.data))));}catch(e){notice(`Gateway: ${e.message}`,true);}};gateway.onerror=()=>notice('Gateway local chưa sẵn sàng hoặc đã ngắt.',true);notice('Gateway chỉ đọc · localhost:8787 · không có command channel.');}catch(e){gatewayControls(false);notice(e.message,true);}});
+$('compare-btn').addEventListener('click',()=>$('compare-file').click());
+$('compare-file').addEventListener('change',async()=>{const fs=[...$('compare-file').files];try{if(fs.length!==2)throw new Error('Chọn đúng 2 science session để so sánh.');const [a,b]=await Promise.all(fs.map(async f=>JSON.parse(await f.text())));const verified=await Promise.all([verifyScienceSession(a),verifyScienceSession(b)]),c=compareScienceSessions(a,b);notice(`Compare · integrity ${verified.map(x=>x?'OK':'NO').join('/')} · grid ${c.grid_match?'MATCH':'DIFF'} · Δbaseline ${c.baseline_delta_db??'—'} dB · Δpeak ${c.peak_frequency_delta_hz??'—'} Hz`);}catch(e){notice(e.message,true);}finally{$('compare-file').value='';}});
 
 function serialControls(connected) {
   for(const id of ['scan','profile','integration','import']) $(id).disabled=connected;
@@ -204,7 +223,7 @@ function drawWaterfall() {
 function render() {
   const samples=history.samples,peaks=findPeaks(samples,Number($('threshold').value));
   const profile=presets[$('profile').value];
-  const analysis=analyzePassiveSpectrum(samples,profile);
+  const analysis=analyzePassiveSpectrum(samples,profile,12,rfiMasks);
   const scienceCandidates=analysis.candidates.filter(c=>!c.quality_flags.length);
   const strongest=samples.reduce((best,s)=>!best||s.rssi_dbm>best.rssi_dbm?s:best,null);
   $('strongest').replaceChildren(document.createTextNode(strongest?strongest.rssi_dbm.toFixed(1)+' ':'— '));

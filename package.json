@@ -1,13 +1,14 @@
 {
   "name": "rf-observatory",
-  "version": "0.5.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "bash scripts/check.sh",
     "test:web": "node --test tests/model.test.mjs",
     "test:browser": "node tests/browser.mjs",
-    "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory web"
+    "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory web",
+    "gateway": "node scripts/gateway.mjs"
   },
   "devDependencies": { "playwright": "1.62.1" }
 }

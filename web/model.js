@@ -234,3 +234,69 @@ export function buildScienceSession({profileKey, samples, analysis, integrationS
     statement:'Candidate review only; astronomical origin requires calibration, RFI rejection, repeatability and independent confirmation.'
   };
 }
+
+
+function cleanText(value, max = 128) {
+  return String(value ?? '').trim().slice(0, max);
+}
+export function validateHardwareManifest(input) {
+  if (!input || input.schema !== 'rf-observatory/hardware-manifest-v1' || input.receive_only !== true)
+    throw new Error('Hardware manifest phải là receive-only schema v1.');
+  const receiver=cleanText(input.receiver), antenna=cleanText(input.antenna);
+  if(!receiver||!antenna) throw new Error('Manifest cần receiver và antenna.');
+  const front=input.front_end ?? {};
+  return {schema:'rf-observatory/hardware-manifest-v1',receive_only:true,receiver,antenna,
+    front_end:{lna:cleanText(front.lna,96),filters:Array.isArray(front.filters)?front.filters.map(x=>cleanText(x,96)).filter(Boolean).slice(0,16):[],clock_reference:cleanText(front.clock_reference,96)},
+    station:cleanText(input.station,96),notes:cleanText(input.notes,256)};
+}
+export function validateCalibrationCurve(input) {
+  if(!input||input.schema!=='rf-observatory/calibration-v1'||!Array.isArray(input.points)||input.points.length<2||input.points.length>128)
+    throw new Error('Calibration curve không đúng schema hoặc số điểm.');
+  const points=input.points.map((p,i)=>{
+    if(!p||!Number.isSafeInteger(p.frequency_hz)||p.frequency_hz<1||p.frequency_hz>0xffffffff||!Number.isFinite(p.correction_db)||p.correction_db<-40||p.correction_db>40)
+      throw new Error(`Điểm calibration ${i+1} không hợp lệ.`);
+    return {frequency_hz:p.frequency_hz,correction_db:Math.round(p.correction_db*1000)/1000};
+  });
+  if(points.some((p,i)=>i&&p.frequency_hz<=points[i-1].frequency_hz)) throw new Error('Tần số calibration phải tăng nghiêm ngặt.');
+  return {schema:'rf-observatory/calibration-v1',points,note:cleanText(input.note,256)};
+}
+function interpolateCorrection(points,hz){
+  if(hz<points[0].frequency_hz||hz>points.at(-1).frequency_hz) throw new Error('Calibration curve không phủ toàn bộ dải quan sát.');
+  let hi=1;while(hi<points.length&&points[hi].frequency_hz<hz)++hi;
+  if(hi>=points.length)return points.at(-1).correction_db;
+  const a=points[hi-1],b=points[hi];
+  if(hz===a.frequency_hz)return a.correction_db;if(hz===b.frequency_hz)return b.correction_db;
+  return a.correction_db+(b.correction_db-a.correction_db)*(hz-a.frequency_hz)/(b.frequency_hz-a.frequency_hz);
+}
+export function applyCalibrationCurve(samples,input){
+  const curve=validateCalibrationCurve(input);
+  return samples.map(sample=>{const s=validateSample(sample),v=s.rssi_dbm+interpolateCorrection(curve.points,s.frequency_hz);
+    if(v<-160||v>20)throw new Error('Calibration đưa RSSI vượt miền hợp lệ.');return {...s,rssi_dbm:Math.round(v*100)/100};});
+}
+export function canonicalJson(value){
+  if(value===null||typeof value!=='object')return JSON.stringify(value);
+  if(Array.isArray(value))return '['+value.map(canonicalJson).join(',')+']';
+  return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonicalJson(value[k])).join(',')+'}';
+}
+export async function sha256Hex(value){
+  const bytes=new TextEncoder().encode(typeof value==='string'?value:canonicalJson(value));
+  const digest=await globalThis.crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+export async function sealScienceSession(session){
+  if(!session||session.schema!=='rf-observatory/science-session-v1')throw new Error('Science session không đúng schema.');
+  const clean={...session};delete clean.integrity;
+  return {...clean,integrity:{algorithm:'SHA-256',digest:await sha256Hex(clean)}};
+}
+export async function verifyScienceSession(session){
+  if(!session?.integrity||session.integrity.algorithm!=='SHA-256')return false;
+  const clean={...session};delete clean.integrity;return (await sha256Hex(clean))===session.integrity.digest;
+}
+export function compareScienceSessions(a,b){
+  if(a?.schema!=='rf-observatory/science-session-v1'||b?.schema!=='rf-observatory/science-session-v1')throw new Error('Cần hai science session v1.');
+  const gridMatch=a.grid?.start_hz===b.grid?.start_hz&&a.grid?.stop_hz===b.grid?.stop_hz&&a.grid?.step_hz===b.grid?.step_hz&&a.grid?.bins===b.grid?.bins;
+  return {profile_match:a.profile===b.profile,grid_match:gridMatch,calibration_match:a.calibration_state===b.calibration_state,
+    baseline_delta_db:Number.isFinite(a.analysis?.baseline_dbm)&&Number.isFinite(b.analysis?.baseline_dbm)?Math.round((b.analysis.baseline_dbm-a.analysis.baseline_dbm)*100)/100:null,
+    peak_frequency_delta_hz:Number.isSafeInteger(a.analysis?.peak_frequency_hz)&&Number.isSafeInteger(b.analysis?.peak_frequency_hz)?b.analysis.peak_frequency_hz-a.analysis.peak_frequency_hz:null,
+    candidate_count_delta:Number.isSafeInteger(a.analysis?.candidate_count)&&Number.isSafeInteger(b.analysis?.candidate_count)?b.analysis.candidate_count-a.analysis.candidate_count:null};
+}
