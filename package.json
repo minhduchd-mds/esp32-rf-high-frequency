@@ -1,6 +1,6 @@
 {
   "name": "rf-observatory",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,10 @@
     "test:web": "node --test tests/model.test.mjs",
     "test:browser": "node tests/browser.mjs",
     "serve": "python3 -m http.server 8080 --bind 127.0.0.1 --directory web",
-    "gateway": "node scripts/gateway.mjs"
+    "gateway": "node scripts/gateway.mjs",
+    "test:gateway": "node --test tests/gateway-http.mjs",
+    "hardware:inventory": "node scripts/hardware-plan.mjs"
   },
   "devDependencies": { "playwright": "1.62.1" }
 }
+

@@ -58,7 +58,7 @@ Completed:
 
 ## v0.7 — reproducibility layer
 
-Completed:
+Historical v0.7 feature scope (superseded by v0.10 validation):
 
 - calibration-curve import and interpolation with full-band coverage checks;
 - raw evidence preserved separately from calibrated display values;
@@ -78,3 +78,8 @@ Still future work:
 A science station should be reproducible: receiver chain, calibration, spectral grid, integration, source provenance, RFI flags and raw evidence must all be recoverable.
 
 No RF transmission, jamming, protected-communications interception/decryption, weapon guidance, military target tracking or covert collection is part of this roadmap.
+
+
+## v0.10 — reliability corrections
+
+Fixes the v0.7 UI export failure and metadata loss; raw is retained before integration/correction. Durable gateway journal, strict stream validation and v2 self-contained bundles replace the incomplete v0.7 evidence path. See ground-station.md and verification.md. Physical calibration, hardware qualification and unattended station operation remain unverified.

@@ -82,11 +82,11 @@ export function demoSweep(profile, sweep) {
   });
 }
 
-export function findPeaks(samples, threshold = -85) {
+export function findPeaks(samples, threshold = -85, limit = 8) {
   return samples.filter((s, i) => s.rssi_dbm >= threshold &&
     (i === 0 || s.rssi_dbm > samples[i-1].rssi_dbm) &&
     (i === samples.length-1 || s.rssi_dbm >= samples[i+1].rssi_dbm))
-    .sort((a, b) => b.rssi_dbm - a.rssi_dbm).slice(0, 8);
+    .sort((a, b) => b.rssi_dbm - a.rssi_dbm).slice(0, limit);
 }
 
 export class ScanHistory {
@@ -145,9 +145,11 @@ export function validateRfiMasks(masks = []) {
 export function analyzePassiveSpectrum(samples, profile, deltaDb = 12, masks = []) {
   if (!samples.length) return {baseline_dbm:null, peak_dbm:null, peak_frequency_hz:null, candidates:[]};
   const safeMasks = validateRfiMasks(masks);
-  const baseline = median(samples.map(s=>s.rssi_dbm));
+  const clean = samples.filter(s=>!safeMasks.some(m=>s.frequency_hz>=m.start_hz&&s.frequency_hz<=m.stop_hz));
+  if (!clean.length) return {baseline_dbm:null,peak_dbm:null,peak_frequency_hz:null,candidates:[],quality_flags:['all_bins_masked']};
+  const baseline = median(clean.map(s=>s.rssi_dbm));
   const threshold = baseline + deltaDb;
-  const candidates = findPeaks(samples, threshold).map(s => {
+  const candidates = findPeaks(samples, threshold, MAX_BINS).map(s => {
     const reference = Number.isFinite(profile?.referenceHz) ? profile.referenceHz : null;
     const nearReference = reference !== null &&
       Math.abs(s.frequency_hz - reference) <= Math.max((profile.step || 0) * 2, 250000);
@@ -161,7 +163,7 @@ export function analyzePassiveSpectrum(samples, profile, deltaDb = 12, masks = [
       quality_flags: mask ? [`rfi_mask:${mask.label}`] : []
     };
   });
-  const peak = samples.reduce((best,s)=>!best||s.rssi_dbm>best.rssi_dbm?s:best,null);
+  const peak = clean.reduce((best,s)=>!best||s.rssi_dbm>best.rssi_dbm?s:best,null);
   return {
     baseline_dbm: Math.round(baseline * 100) / 100,
     peak_dbm: peak.rssi_dbm,
@@ -183,8 +185,8 @@ export function validateSpectrumFrame(frame) {
   if (!Number.isSafeInteger(end) || end > 0xffffffff) throw new Error('Lưới SDR frame vượt miền tần số.');
   if (frame.powers_dbm.some(v=>!Number.isFinite(v) || v < -160 || v > 20))
     throw new Error('Công suất SDR frame không hợp lệ.');
-  const calibration = ['uncalibrated','relative','calibrated'].includes(frame.calibration_state) ?
-    frame.calibration_state : 'uncalibrated';
+  if (!['uncalibrated','relative','calibrated'].includes(frame.calibration_state)) throw new Error('Calibration state không hợp lệ.');
+  const calibration = frame.calibration_state;
   const rbw = frame.rbw_hz == null ? null : frame.rbw_hz;
   const integration = frame.integration_ms == null ? null : frame.integration_ms;
   if (rbw !== null && (!Number.isSafeInteger(rbw) || rbw < 1)) throw new Error('RBW không hợp lệ.');
@@ -242,12 +244,14 @@ function cleanText(value, max = 128) {
 export function validateHardwareManifest(input) {
   if (!input || input.schema !== 'rf-observatory/hardware-manifest-v1' || input.receive_only !== true)
     throw new Error('Hardware manifest phải là receive-only schema v1.');
+  if(typeof input.receiver!=='string'||typeof input.antenna!=='string')throw new Error('Receiver/antenna phải là chuỗi.');
   const receiver=cleanText(input.receiver), antenna=cleanText(input.antenna);
   if(!receiver||!antenna) throw new Error('Manifest cần receiver và antenna.');
   const front=input.front_end ?? {};
   return {schema:'rf-observatory/hardware-manifest-v1',receive_only:true,receiver,antenna,
     front_end:{lna:cleanText(front.lna,96),filters:Array.isArray(front.filters)?front.filters.map(x=>cleanText(x,96)).filter(Boolean).slice(0,16):[],clock_reference:cleanText(front.clock_reference,96)},
-    station:cleanText(input.station,96),notes:cleanText(input.notes,256)};
+    station:cleanText(input.station,96),notes:cleanText(input.notes,256),
+    board:cleanText(input.board,96),module:cleanText(input.module,96),revision:cleanText(input.revision,48),receiver_serial:cleanText(input.receiver_serial,96)};
 }
 export function validateCalibrationCurve(input) {
   if(!input||input.schema!=='rf-observatory/calibration-v1'||!Array.isArray(input.points)||input.points.length<2||input.points.length>128)
@@ -258,7 +262,14 @@ export function validateCalibrationCurve(input) {
     return {frequency_hz:p.frequency_hz,correction_db:Math.round(p.correction_db*1000)/1000};
   });
   if(points.some((p,i)=>i&&p.frequency_hz<=points[i-1].frequency_hz)) throw new Error('Tần số calibration phải tăng nghiêm ngặt.');
-  return {schema:'rf-observatory/calibration-v1',points,note:cleanText(input.note,256)};
+  const result={schema:'rf-observatory/calibration-v1',points,note:cleanText(input.note,256)};
+  if(input.reference!==undefined){
+    const r=input.reference;
+    if(!r||typeof r!=='object'||!Number.isFinite(Date.parse(r.measured_at))||typeof r.instrument!=='string'||!r.instrument.trim()||!Number.isFinite(r.uncertainty_db)||r.uncertainty_db<0)
+      throw new Error('Calibration reference không hợp lệ.');
+    result.reference={measured_at:r.measured_at,instrument:cleanText(r.instrument),uncertainty_db:r.uncertainty_db,method:cleanText(r.method,256)};
+  }
+  return result;
 }
 function interpolateCorrection(points,hz){
   if(hz<points[0].frequency_hz||hz>points.at(-1).frequency_hz) throw new Error('Calibration curve không phủ toàn bộ dải quan sát.');
@@ -285,18 +296,18 @@ export async function sha256Hex(value){
 }
 export async function sealScienceSession(session){
   if(!session||session.schema!=='rf-observatory/science-session-v1')throw new Error('Science session không đúng schema.');
-  const clean={...session};delete clean.integrity;
+  const clean=JSON.parse(JSON.stringify(session));delete clean.integrity;
   return {...clean,integrity:{algorithm:'SHA-256',digest:await sha256Hex(clean)}};
 }
 export async function verifyScienceSession(session){
   if(!session?.integrity||session.integrity.algorithm!=='SHA-256')return false;
   const clean={...session};delete clean.integrity;return (await sha256Hex(clean))===session.integrity.digest;
 }
+// Legacy v1 checksums can still be verified, but lack raw evidence and acquisition metadata.
 export function compareScienceSessions(a,b){
   if(a?.schema!=='rf-observatory/science-session-v1'||b?.schema!=='rf-observatory/science-session-v1')throw new Error('Cần hai science session v1.');
-  const gridMatch=a.grid?.start_hz===b.grid?.start_hz&&a.grid?.stop_hz===b.grid?.stop_hz&&a.grid?.step_hz===b.grid?.step_hz&&a.grid?.bins===b.grid?.bins;
-  return {profile_match:a.profile===b.profile,grid_match:gridMatch,calibration_match:a.calibration_state===b.calibration_state,
-    baseline_delta_db:Number.isFinite(a.analysis?.baseline_dbm)&&Number.isFinite(b.analysis?.baseline_dbm)?Math.round((b.analysis.baseline_dbm-a.analysis.baseline_dbm)*100)/100:null,
-    peak_frequency_delta_hz:Number.isSafeInteger(a.analysis?.peak_frequency_hz)&&Number.isSafeInteger(b.analysis?.peak_frequency_hz)?b.analysis.peak_frequency_hz-a.analysis.peak_frequency_hz:null,
-    candidate_count_delta:Number.isSafeInteger(a.analysis?.candidate_count)&&Number.isSafeInteger(b.analysis?.candidate_count)?b.analysis.candidate_count-a.analysis.candidate_count:null};
+  const gridMatch=!!a.grid&&!!b.grid&&canonicalJson(a.grid)===canonicalJson(b.grid);
+  return {comparable:false,reasons:['Legacy v1: missing raw evidence and acquisition metadata'],
+    profile_match:a.profile===b.profile,grid_match:gridMatch,calibration_match:false,
+    baseline_delta_db:null,peak_frequency_delta_hz:null,candidate_count_delta:null};
 }

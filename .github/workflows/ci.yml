@@ -19,6 +19,8 @@ jobs:
           node-version: '22'
       - name: Core, protocol and web model tests
         run: SANITIZE=1 bash scripts/check.sh
+      - name: Gateway HTTP, SSE and journal integration
+        run: node --test tests/gateway-http.mjs
       - name: CMake build
         run: |
           cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
@@ -50,6 +52,7 @@ jobs:
       - name: Generate ephemeral HTTPS certificate for ESP32-S3 compile test
         if: matrix.target == 'esp32s3'
         run: |
+          echo CONFIG_RF_GPIO_DIAGNOSTICS=y >> firmware/sdkconfig.defaults
           mkdir -p firmware/main/certs
           openssl req -x509 -newkey rsa:2048 -sha256 -nodes             -keyout firmware/main/certs/server.key             -out firmware/main/certs/server.crt             -days 1             -subj "/CN=rf-observatory.local/O=RF Observatory CI"
       - uses: espressif/esp-idf-ci-action@v1
@@ -66,3 +69,4 @@ jobs:
             firmware/build/partition_table/partition-table.bin
             firmware/build/flasher_args.json
           if-no-files-found: error
+

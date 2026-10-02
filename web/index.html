@@ -23,7 +23,7 @@
     </section>
     <section class="stats" aria-label="Thông số vòng quét">
       <div><span>TÍN HIỆU MẠNH NHẤT</span><strong id="strongest">— <small>dBm</small></strong><p id="peak-frequency">Chưa có dữ liệu</p></div>
-      <div><span>BASELINE</span><strong id="baseline">—</strong><p>Median noise floor</p></div>
+      <div><span>BASELINE</span><strong id="baseline">—</strong><p>Median · bỏ vùng RFI</p></div>
       <div><span>SCIENCE CANDIDATES</span><strong id="candidate-count">00</strong><p><b id="persistent-count">00</b> persistent · ≥3 vòng</p></div>
       <div><span>ĐỈNH VƯỢT NGƯỠNG</span><strong id="peak-count">00</strong><p id="resonant-level">Chưa khóa cộng hưởng</p></div>
       <div><span>DẢI ĐANG HIỂN THỊ</span><strong id="band">433–434 <small>MHz</small></strong><p id="resolution">Bước quét 10 kHz</p></div>
@@ -36,8 +36,9 @@
       <section class="panel signals-panel"><div class="panel-heading"><h2>Đỉnh tín hiệu</h2><span class="subtle">Top 8 · candidate review</span></div><div class="table-wrap"><table><thead><tr><th>Tần số</th><th>RSSI</th><th>Mức tín hiệu</th></tr></thead><tbody id="signals"><tr><td colspan="3" class="empty">Bắt đầu quét để xem tín hiệu</td></tr></tbody></table></div></section>
     </div>
     <dialog id="rfi-dialog"><div class="dialog-head"><strong>RFI quality masks</strong><button id="rfi-close" type="button">Đóng</button></div><div class="rfi-form"><label>Bắt đầu MHz<input id="rfi-start" type="number" min="0.001" step="0.001"></label><label>Kết thúc MHz<input id="rfi-stop" type="number" min="0.001" step="0.001"></label><label>Nhãn<input id="rfi-label" type="text" maxlength="48" value="local-rfi"></label><button id="rfi-add" type="button">Thêm mask</button></div><div id="rfi-list" class="rfi-list"></div><p>Mask chỉ gắn quality flag, không xóa raw evidence.</p></dialog>
-    <footer><span id="notice" role="status" aria-live="polite">Chế độ mô phỏng · Thu thụ động · Không phát sóng RF.</span><span>v0.8 · Weak Signal Lab · resonance + persistence + field map</span></footer>
+    <footer><span id="notice" role="status" aria-live="polite">Chế độ mô phỏng · Thu thụ động · Không có lệnh phát RF.</span><span>v0.10 · Receive-only · Evidence replay</span></footer>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
+

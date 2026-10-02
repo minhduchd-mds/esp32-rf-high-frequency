@@ -1,6 +1,6 @@
 # Architecture
 
-## Implemented v0.5
+## Foundation with v0.10 evidence layer
 
 The portable `rf::Scanner` C++17 core remains independent from ESP-IDF and browser code. Physical receiver work is isolated behind acquisition boundaries rather than leaking device-specific assumptions into science processing.
 
@@ -40,3 +40,8 @@ CC1101 and Si4735 remain narrow receive-only laboratory adapters. Space-science 
 ## Scope
 
 No RF transmission, jamming, communications interception/decryption, military target tracking or physical radar measurement is implemented.
+
+
+## v0.10 boundaries
+
+Gateway validates and journals frames before SSE. ObservationSession archives original validated frame/sample values before integration and correction, rejects changing acquisition settings, detects gaps, and never silently evicts raw. Science v2 exports complete replayable evidence; comparison requires compatible verified bundles. Hardware plan validation and GPIO configuration dumps do not execute electrical tests.

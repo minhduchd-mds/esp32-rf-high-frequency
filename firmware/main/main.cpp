@@ -5,8 +5,17 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstdio>
+#include "sdkconfig.h"
+#if defined(CONFIG_RF_GPIO_DIAGNOSTICS) && CONFIG_RF_GPIO_DIAGNOSTICS
+#include "driver/gpio.h"
+#include "soc/soc_caps.h"
+#endif
 
 extern "C" void app_main() {
+#if defined(CONFIG_RF_GPIO_DIAGNOSTICS) && CONFIG_RF_GPIO_DIAGNOSTICS
+    // Inspect current configuration only. Never reset/reconfigure/drive a GPIO.
+    gpio_dump_io_configuration(stdout, SOC_GPIO_VALID_GPIO_MASK);
+#endif
     rf_web::start_async();
 
     // Static storage: keep the ~8 KB sample array off app_main's task stack.
@@ -40,3 +49,4 @@ extern "C" void app_main() {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
+

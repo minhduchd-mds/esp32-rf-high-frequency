@@ -1,57 +1,26 @@
-# Read-only SDR Gateway
+# Local receive-only gateway — v0.10
 
-## Purpose
+Run the UI at `http://localhost:8080` or `http://127.0.0.1:8080`.
+Create a new raw journal for each receiver run:
 
-The SDR gateway is the boundary between a physical science receiver and RF Observatory. Its job is deliberately narrow: accept or produce **pre-channelized receive-only power spectra**, validate them, and hand them to the existing science pipeline.
-
-RF Observatory does not need direct access to arbitrary SDR driver APIs to perform visualization and candidate triage.
-
-## Data flow
-
-```text
-Antenna / feed
-   ↓
-Filter + LNA
-   ↓
-Receive-only SDR / science receiver
-   ↓
-Vendor/local acquisition process
-   ↓
-Spectrum v2 frame
-   ↓
-Validation
-   ↓
-spectrumFrameToSamples()
-   ↓
-Integration / RFI flags / candidate triage
-   ↓
-Science session + raw evidence
+```sh
+RF_ARCHIVE_PATH=/absolute/new-session.jsonl node scripts/gateway.mjs < receiver-output.jsonl
 ```
 
-## Trust boundary
+For continuous acquisition, pipe the output of an independently configured receive-only acquisition process into the gateway. No vendor driver or shell command executor is provided.
 
-The gateway must never infer that a signal is astronomical just because it is strong or near a reference frequency. The receiver process supplies acquisition metadata; RF Observatory validates structure and preserves provenance.
+- Listen: `127.0.0.1:8787`; optional `RF_GATEWAY_PORT` for API clients (the bundled UI uses 8787).
+- GET `/health`: archive state and accepted/rejected/missing/slow-client counts.
+- GET `/events`: validated Spectrum v2 SSE, unique stream/event IDs, 64-frame reconnect replay.
+- Unknown/expired Last-Event-ID: HTTP 409; never silently joins unrelated evidence.
+- No mutating HTTP methods, RF control or retuning endpoints.
+- Allowed browser origins: the two localhost:8080 URLs; no wildcard CORS.
+- Host restricted to localhost/127.0.0.1 and port; at most eight SSE clients.
+- Maximum input line 65,536 bytes, enforced during streaming. Oversized data is discarded through the next newline.
+- Slow clients are disconnected; no unbounded output queue. Heartbeat keeps idle streams observable.
+- Exclusive new journal creation, mode 0600, synchronous write+fsync before publication. Existing paths are refused. An archive failure latches unhealthy state and prevents further publication.
+- Reject non-increasing sequence or decreasing receiver time; count sequence gaps. Reset/wrap needs a new process/journal/session.
 
-Recommended gateway rules:
+The browser fails closed on disconnect and retains its current bounded session. Export it before explicitly reconnecting. Replay is available to compatible API clients but is not automatic recovery in the current UI.
 
-- bind locally by default;
-- read-only ingestion;
-- bounded frame size and bin count;
-- explicit sample/grid units;
-- explicit calibration state;
-- no generic shell execution;
-- no arbitrary device commands;
-- no automatic retuning initiated by remote content;
-- preserve raw frame evidence separately from derived analysis.
-
-## v0.5 implementation
-
-Implemented in the browser model layer:
-
-- `validateSpectrumFrame()`
-- `spectrumFrameToSamples()`
-- bounds for sequence/frequency/bin count/RSSI/RBW/integration
-- calibration-state preservation
-- tests for invalid source and frequency-grid conversion
-
-A later physical adapter can feed this contract from a local receiver process without coupling the UI to one SDR vendor.
+Journals contain normalized validated v2 frames, not byte-for-byte copies of unknown input fields. Partial lines at EOF are not valid frames. Fsync is per frame and may limit throughput; benchmark the target disk/receiver cadence. Disk rotation, retention policy, receiver hardware drivers and long-running service supervision remain commissioning work.

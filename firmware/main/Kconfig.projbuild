@@ -28,4 +28,13 @@ config RF_DEVICE_WEB_HTTPS_PORT
     range 443 65535
     default 443
 
+config RF_GPIO_DIAGNOSTICS
+    bool "Dump GPIO configuration at boot (read-only)"
+    depends on IDF_TARGET_ESP32S3
+    default n
+    help
+        Prints all current GPIO mux/pull/direction and memory reservation states.
+        Does not configure pins, apply stimulus or qualify electrical hardware.
+
 endmenu
+

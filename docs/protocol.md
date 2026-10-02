@@ -55,3 +55,8 @@ A science candidate is not a statement about extraterrestrial origin. Physical o
 ## Scope
 
 Protocols are receive-side only. RF Observatory contains no RF transmit, jamming, decryption/interception, target-control or weapon-guidance message family.
+
+
+## Science session v2 (v0.10)
+
+See ground-station.md for the raw-linked, deterministic-replay bundle. V1 remains a legacy checksum format and is refused for scientific comparison. Spectrum v2 calibration_state is required and never silently coerced. Receiver-monotonic timing is checked across frames in a stream; absolute station time synchronization still requires acquisition-hardware evidence.

@@ -1,5 +1,6 @@
 set(RF_WEB_REQUIRES
     rf_core
+    esp_driver_gpio
     esp_timer
     freertos
     esp_https_server
@@ -27,3 +28,4 @@ else()
     )
     target_compile_definitions(${COMPONENT_LIB} PRIVATE RF_WEB_CERT_EMBEDDED=0)
 endif()
+

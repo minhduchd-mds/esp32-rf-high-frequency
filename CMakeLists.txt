@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rf_observatory VERSION 0.9.0 LANGUAGES CXX)
+project(rf_observatory VERSION 0.10.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_library(rf_core core/src/scanner.cpp)
@@ -11,3 +11,8 @@ enable_testing()
 add_executable(rf_tests tests/core_test.cpp)
 target_link_libraries(rf_tests PRIVATE rf_core)
 add_test(NAME rf_core COMMAND rf_tests)
+
+
+add_executable(rf_fault_tests tests/fault_test.cpp)
+target_link_libraries(rf_fault_tests PRIVATE rf_core)
+add_test(NAME rf_faults COMMAND rf_fault_tests)
