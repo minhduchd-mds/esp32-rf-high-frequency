@@ -1,17 +1,21 @@
 #include "rf/scanner.hpp"
 #include "rf/telemetry.hpp"
+#include "device_web_server.hpp"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <cstdio>
 
 extern "C" void app_main() {
+    rf_web::start_async();
+
     // Static storage: keep the ~8 KB sample array off app_main's task stack.
     static rf::SimulatedReceiver receiver;
     static rf::Scanner scanner(receiver);
     const rf::Plan plan;
     std::uint32_t sweep = 0;
     std::size_t emitted = 0;
+
     for (;;) {
         const auto now = static_cast<std::uint64_t>(esp_timer_get_time() / 1000);
         if (scanner.state() == rf::State::idle || scanner.state() == rf::State::complete) {
@@ -29,6 +33,9 @@ extern "C" void app_main() {
             if (rf::format_sample(line, sizeof(line), scanner.samples()[emitted], sweep, emitted, rf::bin_count(plan)))
                 std::puts(line);
             ++emitted;
+
+            if (scanner.state() == rf::State::complete && emitted == scanner.size())
+                rf_web::publish(scanner.samples().data(), scanner.size(), sweep);
         }
         vTaskDelay(pdMS_TO_TICKS(10));
     }

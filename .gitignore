@@ -2,6 +2,8 @@ build/
 firmware/build/
 firmware/sdkconfig
 firmware/sdkconfig.old
+firmware/main/certs/*
+!firmware/main/certs/README.md
 node_modules/
 test-results/
 __pycache__/

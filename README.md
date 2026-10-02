@@ -1,30 +1,51 @@
 # RF Observatory
 
-Passive RF measurement and space-science workspace built around a portable C++17 scan engine, ESP-IDF firmware, deterministic simulation and a browser mission console.
+Passive RF measurement and space-science workspace built around a portable C++17 scan engine, ESP-IDF firmware, deterministic simulation, browser mission console and an ESP32-S3 on-device HTTPS console.
 
-**Current software version: v0.8.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
+**Current software version: v0.9.0.** Physical space observations still require a suitable receive-only RF front end / SDR, antenna, filtering and calibration.
 
 ## Implemented
 
 - Portable fixed-capacity scan core shared by host and ESP-IDF.
-- JSONL telemetry v1 with complete-sweep validation.
-- Spectrum v2 contract for read-only pre-channelized SDR frames.
+- JSONL telemetry v1 and Spectrum v2 receive-only acquisition.
 - Browser spectrum, polar frequency/RSSI view, peak hold and 360-row science waterfall.
-- Raw JSONL import/export.
-- Science-session export with provenance, grid, integration and calibration state.
-- Profiles for 433 MHz, HF, Solar/Jovian 14–30 MHz and HI 1400–1427 MHz.
-- Power-domain sweep integration: 1×, 4× or 8× in the UI.
-- Median-baseline candidate triage.
-- RFI masks that flag candidates rather than removing evidence.
+- Science-session provenance, calibration, RFI quality masks and SHA-256 integrity.
+- Weak Signal Lab: resonant weighting, multi-sweep persistence, time-domain synchronous detection, multi-sensor coincidence and bounded 3D WaveFieldMap.
+- Local read-only SDR gateway.
+- **ESP32-S3 HTTPS Device Console on port 443 by default** with device status and latest complete spectrum.
 - ESP32 and ESP32-S3 CI builds.
 
-## Run
+## Desktop Mission Console
 
 ```sh
 python3 -m http.server 8080 --bind 127.0.0.1 --directory web
 ```
 
 Open <http://localhost:8080>.
+
+## ESP32-S3 HTTPS Device Console
+
+The S3 hosts a compact dependency-free web UI through ESP-IDF `esp_https_server`.
+
+```text
+Browser
+  ↓ HTTPS :443
+ESP32-S3
+  ├── /
+  ├── /api/status
+  └── /api/spectrum
+```
+
+Configure Wi-Fi locally:
+
+```sh
+cd firmware
+idf.py menuconfig
+```
+
+Under **RF Observatory device console**, set the Wi-Fi SSID/password. Generate a local TLS certificate/key as described in [Device HTTPS](docs/device-https.md), then build and flash. Real credentials, certificates and private keys are excluded from git.
+
+If Wi-Fi or TLS material is absent, scanning/serial telemetry continues and only the device web surface stays offline.
 
 ## Verification
 
@@ -34,62 +55,30 @@ SANITIZE=1 bash scripts/check.sh
 npm run test:browser
 ```
 
+CI additionally generates a one-run TLS certificate and compiles the HTTPS-enabled ESP32-S3 path.
+
 ## Architecture
 
 ```text
-Passive antenna / feed
+Passive sensor / antenna
         ↓
- Filter + LNA
+Receive-only front end
         ↓
-Receive-only SDR / science receiver
+Scanner / SDR acquisition
         ↓
- Spectrum v2
+Validation + Weak Signal Lab
         ↓
- Validation
-        ↓
- Integration
-        ↓
- Baseline + RFI flags
-        ↓
- Candidate triage
-        ↓
- Mission Console
-        ├── raw JSONL
-        └── science-session metadata
+        ├──────── Desktop Mission Console
+        │
+        └──────── ESP32-S3 HTTPS Device Console
+                       ├── status
+                       └── latest spectrum
 ```
 
-ESP32 remains useful as a supervisor/telemetry endpoint, but the project does not claim that ESP32 itself is a broadband radio-astronomy ADC.
+ESP32-S3 is a supervisor/edge telemetry node; this project does not claim the MCU itself is a broadband radio-astronomy ADC.
 
-Read [Space Science Roadmap](docs/space-science.md), [SDR Gateway](docs/sdr-gateway.md), [Protocol](docs/protocol.md), [Architecture](docs/architecture.md) and [Hardware](docs/hardware.md).
+Read [Device HTTPS](docs/device-https.md), [Weak Signal Lab](docs/weak-signal-lab.md), [Space Science Roadmap](docs/space-science.md), [Ground Station](docs/ground-station.md), [SDR Gateway](docs/sdr-gateway.md), [Protocol](docs/protocol.md) and [Architecture](docs/architecture.md).
 
 ## Scope boundary
 
 RF Observatory is receive-only scientific instrumentation. It does not implement RF transmission, jamming, communications interception/decryption, weapon guidance or military target tracking.
-
-
-## Local receive-only gateway
-
-Bridge a physical acquisition process to the browser without exposing an RF command channel:
-
-```sh
-some_receive_only_spectrum_source | npm run gateway
-```
-
-The gateway binds only to `127.0.0.1:8787`, accepts Spectrum v2 NDJSON from **stdin**, and exposes GET-only SSE at `/events`. Browser content cannot send tuner/RF commands through this path.
-
-## Physical-ready metadata
-
-v0.7 adds receive-only hardware-manifest fingerprints, calibration-curve import, raw/calibrated separation, RFI quality-mask editing, SHA-256 sealed science sessions and two-session integrity comparison.
-
-
-## Weak Signal Lab v0.8
-
-The weak-signal layer applies testable principles from induction, field theory and tuned/selective reception:
-
-- Lorentzian resonant weighting around a selected center frequency and Q.
-- Multi-sweep candidate persistence; the Mission Console exposes candidates that survive at least three consecutive clean sweeps.
-- True synchronous/lock-in detection for time-domain samples with declared sample rate and reference frequency; it returns I/Q, amplitude and phase and is not synthesized from RSSI-only data.
-- Multi-sensor coincidence across direct-voltage, E-field, H-field/search-coil, fluxgate and RF-antenna classes.
-- Bounded 3D WaveFieldMap records x/y/z + frequency + sensor + value + timestamp for future spatial field maps.
-
-See [Weak Signal Lab](docs/weak-signal-lab.md).

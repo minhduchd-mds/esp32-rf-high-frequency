@@ -1,0 +1,31 @@
+menu "RF Observatory device console"
+
+config RF_DEVICE_WEB_HTTPS
+    bool "Enable ESP32-S3 HTTPS device console"
+    depends on IDF_TARGET_ESP32S3
+    default y
+    help
+        Hosts a small receive-only telemetry console directly on ESP32-S3.
+        The server uses esp_https_server and does not expose RF command endpoints.
+
+config RF_DEVICE_WEB_WIFI_SSID
+    string "Wi-Fi SSID"
+    depends on RF_DEVICE_WEB_HTTPS
+    default ""
+    help
+        Configure locally with idf.py menuconfig. firmware/sdkconfig is ignored by git.
+
+config RF_DEVICE_WEB_WIFI_PASSWORD
+    string "Wi-Fi password"
+    depends on RF_DEVICE_WEB_HTTPS
+    default ""
+    help
+        Configure locally. Do not commit real credentials.
+
+config RF_DEVICE_WEB_HTTPS_PORT
+    int "HTTPS port"
+    depends on RF_DEVICE_WEB_HTTPS
+    range 443 65535
+    default 443
+
+endmenu

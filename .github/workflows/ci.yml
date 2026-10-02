@@ -47,6 +47,11 @@ jobs:
         target: [esp32, esp32s3]
     steps:
       - uses: actions/checkout@v4
+      - name: Generate ephemeral HTTPS certificate for ESP32-S3 compile test
+        if: matrix.target == 'esp32s3'
+        run: |
+          mkdir -p firmware/main/certs
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes             -keyout firmware/main/certs/server.key             -out firmware/main/certs/server.crt             -days 1             -subj "/CN=rf-observatory.local/O=RF Observatory CI"
       - uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.4.2
