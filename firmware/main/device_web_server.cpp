@@ -147,10 +147,10 @@ bool init_wifi() {
 }
 
 #if RF_WEB_CERT_EMBEDDED
-extern const unsigned char server_crt_start[] asm("_binary_certs_server_crt_start");
-extern const unsigned char server_crt_end[] asm("_binary_certs_server_crt_end");
-extern const unsigned char server_key_start[] asm("_binary_certs_server_key_start");
-extern const unsigned char server_key_end[] asm("_binary_certs_server_key_end");
+extern const unsigned char server_crt_start[] asm("_binary_server_crt_start");
+extern const unsigned char server_crt_end[] asm("_binary_server_crt_end");
+extern const unsigned char server_key_start[] asm("_binary_server_key_start");
+extern const unsigned char server_key_end[] asm("_binary_server_key_end");
 #endif
 
 httpd_handle_t start_https() {
