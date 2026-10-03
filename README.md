@@ -48,6 +48,22 @@ Under **RF Observatory device console**, set the Wi-Fi SSID/password. Generate a
 
 If Wi-Fi or TLS material is absent, scanning/serial telemetry continues and only the device web surface stays offline.
 
+## Nạp firmware ESP32-S3
+
+Thư mục [`flash/`](flash/) cung cấp script build + flash một lệnh cho Windows PowerShell và macOS/Linux.
+
+Windows:
+
+```powershell
+.\flash\flash-esp32s3.ps1 -Port COM5 -Monitor
+```
+
+macOS/Linux:
+
+```bash
+MONITOR=1 ./flash/flash-esp32s3.sh /dev/ttyACM0
+```
+
 ## Reliability upgrade v0.10
 
 Calibration correction is not physical calibration certification. Browser raw sessions stop at capacity; Gateway journals preserve accepted frames before broadcast. Session comparison fails closed on incompatible evidence. Legacy v1 session comparison is disabled. See [pin validation](docs/esp32s3-validation.md) and [commissioning](docs/ground-station.md) for the remaining hardware gates.
