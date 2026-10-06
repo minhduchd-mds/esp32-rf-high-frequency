@@ -1,0 +1,17 @@
+# RF Observatory ESP32-S3 production security profile.
+# This profile is NOT loaded by the normal CI/development build.
+# Enabling Secure Boot / Flash Encryption can permanently program eFuses.
+# Validate provisioning and recovery on dedicated hardware first.
+
+CONFIG_SECURE_BOOT=y
+CONFIG_SECURE_BOOT_V2_ENABLED=y
+CONFIG_SECURE_BOOT_BUILD_SIGNED_BINARIES=y
+CONFIG_SECURE_BOOT_SIGNING_KEY="keys/secure_boot_signing_key.pem"
+
+CONFIG_SECURE_FLASH_ENC_ENABLED=y
+CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y
+
+CONFIG_BOOTLOADER_APP_ROLLBACK=y
+CONFIG_BOOTLOADER_APP_ROLLBACK_CONFIRM_BY_APP=y
+CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y
+CONFIG_BOOTLOADER_APP_SECURE_VERSION=1
