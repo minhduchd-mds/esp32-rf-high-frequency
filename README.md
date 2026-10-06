@@ -98,7 +98,7 @@ Validation + Weak Signal Lab
 
 ESP32-S3 is a supervisor/edge telemetry node; this project does not claim the MCU itself is a broadband radio-astronomy ADC.
 
-Read [Device HTTPS](docs/device-https.md), [Weak Signal Lab](docs/weak-signal-lab.md), [Space Science Roadmap](docs/space-science.md), [Ground Station](docs/ground-station.md), [SDR Gateway](docs/sdr-gateway.md), [Protocol](docs/protocol.md) and [Architecture](docs/architecture.md).
+Read [Device HTTPS](docs/device-https.md), [Weak Signal Lab](docs/weak-signal-lab.md), [Space Science Roadmap](docs/space-science.md), [Ground Station](docs/ground-station.md), [SDR Gateway](docs/sdr-gateway.md), [SigMF interoperability](docs/sigmf-interoperability.md), [Embedded security](docs/security-hardening.md), [Protocol](docs/protocol.md) and [Architecture](docs/architecture.md).
 
 ## Scope boundary
 
