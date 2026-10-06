@@ -158,7 +158,17 @@ httpd_handle_t start_https() {
     ESP_LOGE(kTag, "HTTPS certificate/key missing. See firmware/main/certs/README.md.");
     return nullptr;
 #else
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
+    // ESP-IDF 6.1 adds SSL-config fields while the upstream default macro remains
+    // intentionally aggregate-initialized. Keep -Werror globally and isolate the
+    // compatibility suppression to this vendor-provided initializer only.
     httpd_ssl_config_t config = HTTPD_SSL_CONFIG_DEFAULT();
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
     config.port_secure = CONFIG_RF_DEVICE_WEB_HTTPS_PORT;
     config.httpd.max_uri_handlers = 4;
     config.httpd.stack_size = 12288;
