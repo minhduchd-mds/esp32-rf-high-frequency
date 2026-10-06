@@ -19,6 +19,20 @@ jobs:
           node-version: '22'
       - name: Core, protocol and web model tests
         run: SANITIZE=1 bash scripts/check.sh
+      - name: Validate production security profile invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile=firmware/sdkconfig.production.defaults
+          test -s "$profile"
+          grep -qx 'CONFIG_SECURE_BOOT=y' "$profile"
+          grep -qx 'CONFIG_SECURE_BOOT_V2_ENABLED=y' "$profile"
+          grep -qx 'CONFIG_SECURE_FLASH_ENC_ENABLED=y' "$profile"
+          grep -qx 'CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y' "$profile"
+          grep -qx 'CONFIG_BOOTLOADER_APP_ROLLBACK=y' "$profile"
+          grep -qx 'CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y' "$profile"
+          ! grep -q 'CONFIG_SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT=y' "$profile"
+          ! grep -q 'CONFIG_SECURE_BOOT_INSECURE=y' "$profile"
       - name: Gateway HTTP, SSE and journal integration
         run: node --test tests/gateway-http.mjs
       - name: CMake build
