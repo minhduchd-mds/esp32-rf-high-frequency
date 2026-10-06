@@ -70,3 +70,21 @@ jobs:
             firmware/build/flasher_args.json
           if-no-files-found: error
 
+
+  firmware-next:
+    name: ESP32-S3 / ESP-IDF 6.1 compatibility
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Generate ephemeral HTTPS certificate
+        run: |
+          echo CONFIG_RF_GPIO_DIAGNOSTICS=y >> firmware/sdkconfig.defaults
+          mkdir -p firmware/main/certs
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes -keyout firmware/main/certs/server.key -out firmware/main/certs/server.crt -days 1 -subj "/CN=rf-observatory.local/O=RF Observatory CI"
+      - name: Build ESP32-S3 with ESP-IDF 6.1
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v6.1
+          target: esp32s3
+          path: firmware
