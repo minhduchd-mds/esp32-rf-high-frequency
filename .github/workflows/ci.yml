@@ -29,7 +29,7 @@ jobs:
           grep -qx 'CONFIG_SECURE_BOOT_V2_ENABLED=y' "$profile"
           grep -qx 'CONFIG_SECURE_FLASH_ENC_ENABLED=y' "$profile"
           grep -qx 'CONFIG_SECURE_FLASH_ENCRYPTION_MODE_RELEASE=y' "$profile"
-          grep -qx 'CONFIG_BOOTLOADER_APP_ROLLBACK=y' "$profile"
+          grep -qx 'CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y' "$profile"
           grep -qx 'CONFIG_BOOTLOADER_APP_ANTI_ROLLBACK=y' "$profile"
           ! grep -q 'CONFIG_SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT=y' "$profile"
           ! grep -q 'CONFIG_SECURE_BOOT_INSECURE=y' "$profile"
@@ -97,14 +97,16 @@ jobs:
       - name: Resolve isolated production defaults (no flash or provisioning)
         working-directory: firmware
         run: |
-          idf.py -B build/security -DSDKCONFIG=sdkconfig.security -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.production.defaults" -DIDF_TARGET=esp32s3 reconfigure
+          set -euo pipefail
+          idf.py -B build/security -DSDKCONFIG=sdkconfig.security -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.production.defaults" -DIDF_TARGET=esp32s3 reconfigure 2>&1 | tee security-config.log
+          ! grep -Eqi 'unknown kconfig symbol' security-config.log
       - name: Assert effective security settings
         working-directory: firmware
         shell: bash
         run: |
           set -euo pipefail
           config=sdkconfig.security
-          for option in SECURE_BOOT SECURE_BOOT_V2_ENABLED SECURE_BOOT_BUILD_SIGNED_BINARIES SECURE_FLASH_ENC_ENABLED SECURE_FLASH_ENCRYPTION_MODE_RELEASE BOOTLOADER_APP_ROLLBACK BOOTLOADER_APP_ANTI_ROLLBACK; do
+          for option in SECURE_BOOT SECURE_BOOT_V2_ENABLED SECURE_BOOT_BUILD_SIGNED_BINARIES SECURE_FLASH_ENC_ENABLED SECURE_FLASH_ENCRYPTION_MODE_RELEASE BOOTLOADER_APP_ROLLBACK_ENABLE BOOTLOADER_APP_ANTI_ROLLBACK; do
             grep -qx "CONFIG_${option}=y" "$config"
           done
           grep -qx 'CONFIG_BOOTLOADER_APP_SECURE_VERSION=1' "$config"
