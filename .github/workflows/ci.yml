@@ -85,6 +85,33 @@ jobs:
           if-no-files-found: error
 
 
+  production-security:
+    name: Resolve ESP32-S3 production security configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: espressif/install-esp-idf-action@v1
+        with:
+          version: v5.4.2
+      - name: Resolve isolated production defaults (no flash or provisioning)
+        working-directory: firmware
+        run: |
+          idf.py -B build/security -DSDKCONFIG=sdkconfig.security -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.production.defaults" -DIDF_TARGET=esp32s3 reconfigure
+      - name: Assert effective security settings
+        working-directory: firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          config=sdkconfig.security
+          for option in SECURE_BOOT SECURE_BOOT_V2_ENABLED SECURE_BOOT_BUILD_SIGNED_BINARIES SECURE_FLASH_ENC_ENABLED SECURE_FLASH_ENCRYPTION_MODE_RELEASE BOOTLOADER_APP_ROLLBACK BOOTLOADER_APP_ANTI_ROLLBACK; do
+            grep -qx "CONFIG_${option}=y" "$config"
+          done
+          grep -qx 'CONFIG_BOOTLOADER_APP_SECURE_VERSION=1' "$config"
+          ! grep -qx 'CONFIG_SECURE_FLASH_ENCRYPTION_MODE_DEVELOPMENT=y' "$config"
+          ! grep -qx 'CONFIG_SECURE_BOOT_INSECURE=y' "$config"
+
+
   firmware-next:
     name: ESP32-S3 / ESP-IDF 6.1 compatibility
     runs-on: ubuntu-latest

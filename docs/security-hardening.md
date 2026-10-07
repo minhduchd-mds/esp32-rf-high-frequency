@@ -18,3 +18,13 @@ A field-station release should record:
 - TLS/device identity provisioning state
 - raw journal retention policy
 - health and storage-failure behavior
+
+## Configuration qualification in CI
+
+A separate required job runs ESP-IDF reconfigure for ESP32-S3 with both developer
+and production defaults in an isolated sdkconfig and build directory. It checks
+the effective Secure Boot v2, signing, release-mode flash encryption, rollback,
+anti-rollback and security version settings, so ignored or incompatible defaults
+cannot pass by appearing only in the source file. This gate does not build or
+publish production firmware, generate signing keys, flash devices or burn eFuses.
+It proves configuration resolution, not physical provisioning or OTA recovery.
